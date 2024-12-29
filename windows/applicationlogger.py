@@ -6,6 +6,9 @@ import time
 from pygetwindow import getWindowsWithTitle
 import json
 import re
+import logging
+import pyautogui
+import pyperclip
 from ctypes import Structure, windll, c_uint, c_ulong, sizeof, byref
 
 BROWSERS = ["Chrome","Firefox", "Edge",
@@ -38,47 +41,43 @@ def get_idle_time():
 
 
     
-def track_webpage():
-    # active_window = win32gui.GetForegroundWindow()
-    # window_title = win32gui.GetWindowText(active_window)
-
-    # print(f"Webpage title: {window_title}")#debuggin remove
-    # webpage = re.sub(r" - (Chrome|Opera|Firefox|Edge|Brave)$", "", window_title)
-    # #debugging
-    # print(f"Modified title: {webpage}")#debugging remove
-    # return webpage
-    hwnd = win32gui.GetForegroundWindow()  # Get active window handle
-    window_title = win32gui.GetWindowText(hwnd)  # Get the window title
+def track_webpage(browser_name):
+    pyautogui.hotkey('ctrl', 'l')
+    pyautogui.hotkey('ctrl', 'c')
     
-    # Regex to extract domain from window title
-    match = re.search(r' - ([\w.-]+\.[a-z]{2,}) - (Google Chrome|Mozilla Firefox|Edge|Brave|Opera)', window_title)
-    
-    if match:
-        return match.group(1)  # Return the domain part
-    
-    return "DOMAIN NOT FOUND"
-
-
+    active_url = pyperclip.paste()
+    logging.info(f"Active webpage: {active_url}")
+    return active_url
 
 def get_active_application():
 
     active_window = win32gui.GetForegroundWindow()
     _, pid = win32process.GetWindowThreadProcessId(active_window)
 
+    if pid ==0:
+        logging.warning("No active window detected (PID = 0 )")
+        return None
     try:
         process = psutil.Process(pid)
         process_name =  process.name()
         application_name =  re.sub (r"\.exe$", "", process_name)
         
+        logging.info(f"Active application: {application_name}")
+
         if application_name in BROWSERS:
-            webpage_name = track_webpage()
+            logging.warning(f"Browser detected: {application_name}")
+            webpage_name = track_webpage(application_name)
             return webpage_name
 
         return application_name
 
-    except psutil.NoSuchProcess as e:
+    except psutil.NoSuchProcess:
+        logging.warning(f"Process with PID {pid} not found")
         return None
-
+    except Exception as e:
+        logging.error(f"Error:{e}")
+        return None
+ 
     
 """
     Function to log the active application
@@ -92,6 +91,7 @@ def activity_logger():
 
     while True:
         active_window = get_active_application()
+        logging.warning(f"Active window: {active_window}")
         idle_time = get_idle_time()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -106,8 +106,10 @@ def activity_logger():
             if idle_start is not None:
                 activity_log.append({
                     "event": "idle",
+                    "application": last_active,
                     "start": idle_start,
-                    "end": timestamp
+                    "end": timestamp, 
+                    "duration": (datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S") - datetime.strptime(idle_start, "%Y-%m-%d %H:%M:%S")).total_seconds()
                 })
                 idle_start = None
             #if the user is active and the active window has changed
@@ -116,15 +118,15 @@ def activity_logger():
                     activity_log.append({
                         "event": "active",
                         "application": last_active,
+                        "start": active_start,
+                        "end": timestamp,
                         "duration": (datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S") - datetime.strptime(active_start, "%Y-%m-%d %H:%M:%S")).total_seconds()
                     })
                 last_active = active_window
                 active_start = timestamp
-
-
-
+        
 
 
 if __name__ == "__main__":
-    time.sleep(2)
+
     activity_logger()
