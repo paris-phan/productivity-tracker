@@ -10,12 +10,19 @@ import logging
 import pyautogui
 import pyperclip
 from ctypes import Structure, windll, c_uint, c_ulong, sizeof, byref
+import signal 
+from pywinauto import Application
 
-BROWSERS = ["Chrome","Firefox", "Edge",
-            "Opera", "Brave",  "chrome",
-            "firefox", "edge", "opera",
-            "brave" ]
-          
+#list of supported chromium based browsers
+BROWSERS = ["chrome", "chromium", "firefox",
+            "opera", "edge", "brave"]  
+BROWSER_TITLES = {
+    "chrome": "Address and search bar",
+    "firefox": "Search or enter address",
+    "edge": "Address and search bar",
+    "opera": "Address field",
+    "brave": "Address and search bar",
+}
 IDLE_THRESHOLD = 300  # 5 minutes
 
 
@@ -28,6 +35,7 @@ class LASTINPUTINFO(Structure):
 """
 amount of times since last user input
 """
+
 def get_idle_time():
     lii = LASTINPUTINFO()
     lii.cbSize = sizeof(LASTINPUTINFO)
@@ -41,13 +49,15 @@ def get_idle_time():
 
 
     
-def track_webpage(browser_name):
-    pyautogui.hotkey('ctrl', 'l')
-    pyautogui.hotkey('ctrl', 'c')
-    
-    active_url = pyperclip.paste()
-    logging.info(f"Active webpage: {active_url}")
-    return active_url
+def get_browser_url(browser_name):
+    browser_name_cap = browser_name.capitalize()
+    app = Application(backend='uia')
+    app.connect(title_re=f".*{browser_name_cap}.*")
+    element_name = BROWSER_TITLES[browser_name.lower()]
+    dlg = app.top_window()
+    url = dlg.child_window(title=element_name, control_type="Edit").get_value()
+    return url 
+
 
 def get_active_application():
 
@@ -63,13 +73,12 @@ def get_active_application():
         application_name =  re.sub (r"\.exe$", "", process_name)
         
         logging.info(f"Active application: {application_name}")
+        #if the active application is a browser
+        if application_name.lower() in BROWSERS:
+            #geting the active tab url
+            return get_browser_url(application_name.lower())
 
-        if application_name in BROWSERS:
-            logging.warning(f"Browser detected: {application_name}")
-            webpage_name = track_webpage(application_name)
-            return webpage_name
-
-        return application_name
+        return application_name.lower()
 
     except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found")
@@ -88,8 +97,10 @@ def activity_logger():
     active_start = None
     idle_start = None
 
-
+    start_time = time.time()
+    run_duration = 60 #loop runs for 15 seconds
     while True:
+    
         active_window = get_active_application()
         logging.warning(f"Active window: {active_window}")
         idle_time = get_idle_time()
@@ -124,9 +135,16 @@ def activity_logger():
                     })
                 last_active = active_window
                 active_start = timestamp
+
+        time.sleep(1)        
+
+
+        ###For now only running the loop x-amount of time ####
+        if time.time() - start_time > run_duration :
+            print(activity_log)
+            break
         
 
 
 if __name__ == "__main__":
-
     activity_logger()
