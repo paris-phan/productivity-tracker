@@ -56,9 +56,10 @@ def get_browser_url(browser_name):
     element_name = BROWSER_TITLES[browser_name.lower()]
     dlg = app.top_window()
     url = dlg.child_window(title=element_name, control_type="Edit").get_value()
-    return url 
+    return browser_name_cap, url 
 
 
+# return active application,url(if applicable)
 def get_active_application():
 
     active_window = win32gui.GetForegroundWindow()
@@ -66,7 +67,7 @@ def get_active_application():
 
     if pid ==0:
         logging.warning("No active window detected (PID = 0 )")
-        return None
+        return None, None
     try:
         process = psutil.Process(pid)
         process_name =  process.name()
@@ -78,14 +79,14 @@ def get_active_application():
             #geting the active tab url
             return get_browser_url(application_name.lower())
 
-        return application_name.lower()
+        return application_name.lower(), None
 
     except psutil.NoSuchProcess:
         logging.warning(f"Process with PID {pid} not found")
-        return None
+        return None, None
     except Exception as e:
         logging.error(f"Error:{e}")
-        return None
+        return None, None
  
     
 """
@@ -94,15 +95,17 @@ def get_active_application():
 def activity_logger():
     activity_log = []
     last_active = None
+    last_url = None
     active_start = None
     idle_start = None
 
     start_time = time.time()
-    run_duration = 60 #loop runs for 15 seconds
+    run_duration = 20 #loop runs for 15 seconds
     while True:
     
-        active_window = get_active_application()
+        active_window, url  = get_active_application()
         logging.warning(f"Active window: {active_window}")
+        logging.warning(f"Active window: {url}")
         idle_time = get_idle_time()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -124,24 +127,26 @@ def activity_logger():
                 })
                 idle_start = None
             #if the user is active and the active window has changed
-            if active_window != last_active:
+            if active_window != last_active or url != last_url:
                 if last_active is not None:
                     activity_log.append({
                         "event": "active",
                         "application": last_active,
                         "start": active_start,
                         "end": timestamp,
+                        "url": last_url if last_url is not None else None,
                         "duration": (datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S") - datetime.strptime(active_start, "%Y-%m-%d %H:%M:%S")).total_seconds()
                     })
                 last_active = active_window
+                last_url = url
                 active_start = timestamp
 
         time.sleep(1)        
 
 
-        ###For now only running the loop x-amount of time ####
+        #For now only running the loop x-amount of time ####
         if time.time() - start_time > run_duration :
-            print(activity_log)
+            print(json.dumps(activity_log, indent=4))
             break
         
 
