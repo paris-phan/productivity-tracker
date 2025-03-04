@@ -8,7 +8,7 @@ Productivity/Screen-time/Time tracker that completely violates privacy standards
 ---
 
 ## Overview
-A cross-platform logger for macOS, iOS, and Windows to track app usage, website activity, and user interaction. Data syncs to a central server for processing and insights.
+A cross-platform logger for macOS, iOS, and Windows to track app usage, website activity, and user interaction. Data syncs to a central server for processing and insights to help with user productivity
 
 ### Key Features
 - Track time on apps and websites.
